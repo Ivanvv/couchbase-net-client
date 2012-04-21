@@ -83,10 +83,11 @@ namespace Couchbase
 			this(If((ICouchbaseClientConfiguration)ConfigurationManager.GetSection(sectionName),
 					(o) => { if (o == null) throw new ArgumentException("Missing section: " + sectionName); })) { }
 
-		protected override bool PerformTryGet(string key, out ulong cas, out object value)
+		protected override bool PerformTryGet(string key, out ulong cas, out object value, out int statusCode)
 		{
 			var hashedKey = this.KeyTransformer.Transform(key);
 			var node = this.Pool.Locate(hashedKey);
+			statusCode = -1;
 
 			if (node != null)
 			{
@@ -96,10 +97,12 @@ namespace Couchbase
 				{
 					value = this.Transcoder.Deserialize(command.Result);
 					cas = command.CasValue;
+					statusCode = command.StatusCode;
 					if (this.PerformanceMonitor != null) this.PerformanceMonitor.Get(1, true);
 
 					return true;
 				}
+				statusCode = command.StatusCode;
 			}
 
 			value = null;
@@ -109,10 +112,11 @@ namespace Couchbase
 			return false;
 		}
 
-		protected override ulong PerformMutate(MutationMode mode, string key, ulong defaultValue, ulong delta, uint expires, ref ulong cas)
+        protected override ulong PerformMutate(MutationMode mode, string key, ulong defaultValue, ulong delta, uint expires, ref ulong cas, out int statusCode)
 		{
 			var hashedKey = this.KeyTransformer.Transform(key);
 			var node = this.Pool.Locate(hashedKey);
+			statusCode = -1;
 
 			if (node != null)
 			{
@@ -122,6 +126,7 @@ namespace Couchbase
 				if (this.PerformanceMonitor != null) this.PerformanceMonitor.Mutate(mode, 1, success);
 
 				cas = command.CasValue;
+				statusCode = command.StatusCode;
 
 				if (success)
 					return command.Result;
@@ -132,10 +137,11 @@ namespace Couchbase
 			return defaultValue;
 		}
 
-		protected override bool PerformConcatenate(ConcatenationMode mode, string key, ref ulong cas, ArraySegment<byte> data)
+		protected override bool PerformConcatenate(ConcatenationMode mode, string key, ref ulong cas, ArraySegment<byte> data, out int statusCode)
 		{
 			var hashedKey = this.KeyTransformer.Transform(key);
 			var node = this.Pool.Locate(hashedKey);
+			statusCode = -1;
 
 			if (node != null)
 			{
@@ -143,6 +149,7 @@ namespace Couchbase
 				var retval = this.ExecuteWithRedirect(node, command);
 
 				cas = command.CasValue;
+				statusCode = command.StatusCode;
 				if (this.PerformanceMonitor != null) this.PerformanceMonitor.Concatenate(mode, 1, true);
 
 				return retval;
